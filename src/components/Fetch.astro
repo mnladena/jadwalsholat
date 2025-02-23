@@ -1,0 +1,113 @@
+<div>
+    <div id="sholat"></div>
+</div>
+
+<script>
+   async function getCityFromCoordinates(lat, lon) {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+    const data = await response.json();
+
+    console.log("Response Geocoding:", data); 
+
+    if (data && data.address) {
+      return data.address.city || data.address.town || data.address.village || null;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error mendapatkan nama kota:", error);
+    return null;
+  }
+}
+
+async function getCityId(cityName) {
+  try {
+    const response = await fetch("https://api.myquran.com/v2/sholat/kota/semua");
+    const cities = await response.json();
+
+    console.log("Daftar Kota:", cities.data); 
+
+    if (!cities.status) throw new Error("Gagal mengambil daftar kota");
+
+    const city = cities.data.find(c => c.lokasi.toLowerCase().includes(cityName.toLowerCase()));
+
+    if (city) {
+      console.log(`Kota ditemukan: ${city.lokasi} (ID: ${city.id})`);
+      return city.id;
+    } else {
+      console.warn("Kota tidak ditemukan dalam database API.");
+      return null;
+    }
+  } catch (error) {
+    console.error("Gagal menemukan ID kota:", error);
+    return null;
+  }
+}
+
+async function getSholatData() {
+  try {
+    if (!navigator.geolocation) {
+      throw new Error("Geolocation tidak didukung di browser ini.");
+    }
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      console.log(`Lokasi Anda: ${lat}, ${lon}`);
+
+      const cityName = await getCityFromCoordinates(lat, lon);
+      if (!cityName) throw new Error("Gagal menemukan kota dari koordinat.");
+
+      console.log(`Nama Kota dari Koordinat: ${cityName}`);
+
+      const cityId = await getCityId(cityName);
+      if (!cityId) throw new Error("Gagal menemukan ID kota.");
+
+      // Dapatkan tanggal hari ini dalam format YYYY/MM/DD sesuai zona waktu lokal
+      const today = new Intl.DateTimeFormat("id-ID", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(new Date()).split('/').reverse().join('-'); 
+
+      console.log("Tanggal Hari Ini:", today);
+
+      // Fetch jadwal sholat berdasarkan ID kota
+      const response = await fetch(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`);
+      const result = await response.json();
+
+      console.log("Response Jadwal Sholat:", result); 
+
+      if (!result.status) throw new Error("Gagal mengambil data jadwal sholat.");
+
+      const data = result.data;
+      const jadwal = data.jadwal;
+
+      document.getElementById("sholat").innerHTML = `
+        <h3>Jadwal Sholat - ${data.lokasi}, ${data.daerah}</h3>
+        <p><strong>Tanggal:</strong> ${jadwal.tanggal}</p>
+        <ul>
+          <li><strong>Imsak:</strong> ${jadwal.imsak}</li>
+          <li><strong>Subuh:</strong> ${jadwal.subuh}</li>
+          <li><strong>Terbit:</strong> ${jadwal.terbit}</li>
+          <li><strong>Dhuha:</strong> ${jadwal.dhuha}</li>
+          <li><strong>Dzuhur:</strong> ${jadwal.dzuhur}</li>
+          <li><strong>Ashar:</strong> ${jadwal.ashar}</li>
+          <li><strong>Maghrib:</strong> ${jadwal.maghrib}</li>
+          <li><strong>Isya:</strong> ${jadwal.isya}</li>
+        </ul>
+      `;
+    }, (error) => {
+      console.error("Gagal mendapatkan lokasi:", error);
+      document.getElementById("sholat").innerHTML = "<p>Gagal mendeteksi lokasi.</p>";
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    document.getElementById("sholat").innerHTML = "<p>Terjadi kesalahan saat mengambil data.</p>";
+  }
+}
+
+// Jalankan fungsi saat halaman dimuat
+getSholatData();
+
+</script>
