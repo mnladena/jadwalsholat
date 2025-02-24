@@ -1,19 +1,10 @@
 <div class="bg-white p-5 ">
     <div id="sholat"></div>
     <template id="sholat-template">
-      <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span>, <span class="residensi"></span></h3>
-      <div class="tanggal mb-5"></div>
+      <h3 class="mb-5">📍<span class="lokasi"></span>, <span class="daerah"></span>, <span class="residensi"></span></h3>
+      <div class="mb-5">📅 <span class="tanggal"></span></div>
       <div id="countdown" class="mb-5 text-red-400"></div>
-      <ul class="flex flex-col gap-4" id="list-sholat">
-        <li class="p-4 bg-green-200 flex justify-between items-center imsak"><strong>Imsak:</strong> <span class="imsak-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center subuh"><strong>Subuh:</strong> <span class="subuh-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center terbit"><strong>Terbit:</strong> <span class="terbit-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center dhuha"><strong>Dhuha:</strong> <span class="dhuha-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center dzuhur"><strong>Dzuhur:</strong> <span class="dzuhur-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center ashar"><strong>Ashar:</strong> <span class="ashar-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center maghrib"><strong>Maghrib:</strong> <span class="maghrib-time"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center isya"><strong>Isya:</strong> <span class="isya-time"></span></li>
-      </ul>
+      <ul class="flex flex-col gap-4" id="list-sholat"></ul>
     </template>
 </div>
 
@@ -80,47 +71,88 @@ const formatTime = (ms) => {
   return `${hours}:${minutes}:${seconds}`;
 };
 
+// const updateSholatTemplate = (data, jadwal, nextDayJadwal) => {
+//   const template = document.getElementById("sholat-template").content.cloneNode(true);
+//   Object.entries({ lokasi: data.lokasi, daerah: data.daerah, ...jadwal }).forEach(([key, value]) => {
+//     const el = template.querySelector(`.${key}-time`);
+//     if (el) el.textContent = value;
+//   });
+
+//   const countdownEl = document.createElement("p");
+//   countdownEl.id = "countdown";
+//   template.appendChild(countdownEl);
+
+//   const container = document.getElementById("sholat");
+//   container.innerHTML = "";
+//   container.appendChild(template);
+
+//   startCountdown(jadwal, nextDayJadwal);
+
+//   setTimeout(() => {
+//   const lokasiEl = document.querySelector(".lokasi");
+//   const daerahEl = document.querySelector(".daerah");
+//   const tanggalEl = document.querySelector(".tanggal");
+
+//   if (lokasiEl) lokasiEl.textContent = data.lokasi;
+//   if (daerahEl) daerahEl.textContent = data.daerah;
+
+//   if (tanggalEl) {
+//     const today = new Date();
+//     const formattedDate = today.toLocaleDateString("id-ID", {
+//       weekday: "long",
+//       day: "numeric",
+//       month: "long",
+//       year: "numeric",
+//     });
+//     tanggalEl.textContent = formattedDate;
+//   }
+
+// }, 500); // Tunggu sebentar agar elemen ada di DOM
+
+// };
+
 const updateSholatTemplate = (data, jadwal, nextDayJadwal) => {
+  const { name } = getNextPrayerTime(jadwal, nextDayJadwal); // Dapatkan waktu sholat saat ini
+
+  // Perbarui lokasi dan daerah
+  // document.querySelector(".lokasi").textContent = data.lokasi;
+  // document.querySelector(".daerah").textContent = data.daerah;
+
+  // Ambil template dan container
   const template = document.getElementById("sholat-template").content.cloneNode(true);
-  Object.entries({ lokasi: data.lokasi, daerah: data.daerah, ...jadwal }).forEach(([key, value]) => {
-    const el = template.querySelector(`.${key}-time`);
-    if (el) el.textContent = value;
+  const listSholat = template.querySelector("#list-sholat");
+
+  // Daftar waktu sholat
+  const jadwalSholat = ["imsak", "subuh", "terbit", "dhuha", "dzuhur", "ashar", "maghrib", "isya"];
+  
+  jadwalSholat.forEach(sholat => {
+    const li = document.createElement("li");
+    li.className = `p-4 bg-green-200 flex justify-between items-center ${sholat}`;
+    
+    // Tambahkan highlight jika ini waktu sholat saat ini
+    if (sholat === name) {
+      li.classList.add("active");
+    }
+
+    li.innerHTML = `<strong>${sholat.charAt(0).toUpperCase() + sholat.slice(1)}</strong> <span class="${sholat}-time">${jadwal[sholat]}</span>`;
+
+    // Pindahkan waktu sholat saat ini ke atas
+    if (sholat === name) {
+      listSholat.prepend(li);
+    } else {
+      listSholat.appendChild(li);
+    }
   });
 
-  const countdownEl = document.createElement("p");
-  countdownEl.id = "countdown";
-  template.appendChild(countdownEl);
-
+  // Masukkan template ke dalam container
   const container = document.getElementById("sholat");
   container.innerHTML = "";
   container.appendChild(template);
 
+  // Jalankan countdown
   startCountdown(jadwal, nextDayJadwal);
-
-  setTimeout(() => {
-  const lokasiEl = document.querySelector(".lokasi");
-  const daerahEl = document.querySelector(".daerah");
-  const tanggalEl = document.querySelector(".tanggal");
-
-  if (lokasiEl) lokasiEl.textContent = data.lokasi;
-  if (daerahEl) daerahEl.textContent = data.daerah;
-
-  if (tanggalEl) {
-    const today = new Date();
-    const formattedDate = today.toLocaleDateString("id-ID", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    tanggalEl.textContent = formattedDate;
-  }
-
-  // console.log("Lokasi ditampilkan:", data.lokasi, data.daerah);
-  // console.log("Tanggal ditampilkan:", formattedDate);
-}, 500); // Tunggu sebentar agar elemen ada di DOM
-
 };
+
 
 const startCountdown = (jadwal, nextDayJadwal) => {
   const countdownEl = document.getElementById("countdown");
