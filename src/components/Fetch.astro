@@ -3,22 +3,23 @@
     <template id="sholat-template">
       <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span></h3>
       <div class="tanggal mb-5"></div>
-      <ul class="flex flex-col gap-4">
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Imsak:</strong> <span class="imsak"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Subuh:</strong> <span class="subuh"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Terbit:</strong> <span class="terbit"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Dhuha:</strong> <span class="dhuha"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Dzuhur:</strong> <span class="dzuhur"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Ashar:</strong> <span class="ashar"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Maghrib:</strong> <span class="maghrib"></span></li>
-        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Isya:</strong> <span class="isya"></span></li>
+      <div id="countdown" class="mb-5 text-red-400"></div>
+      <ul class="flex flex-col gap-4" id="list-sholat">
+        <li class="p-4 bg-green-200 flex justify-between items-center imsak"><strong>Imsak:</strong> <span class="imsak-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center subuh"><strong>Subuh:</strong> <span class="subuh-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center terbit"><strong>Terbit:</strong> <span class="terbit-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center dhuha"><strong>Dhuha:</strong> <span class="dhuha-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center dzuhur"><strong>Dzuhur:</strong> <span class="dzuhur-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center ashar"><strong>Ashar:</strong> <span class="ashar-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center maghrib"><strong>Maghrib:</strong> <span class="maghrib-time"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center isya"><strong>Isya:</strong> <span class="isya-time"></span></li>
       </ul>
     </template>
 </div>
 
 
 <script>
-   const fetchJSON = async (url) => (await fetch(url)).json();
+  const fetchJSON = async (url) => (await fetch(url)).json();
 
 const getCityFromCoordinates = async (lat, lon) => {
   try {
@@ -40,16 +41,83 @@ const getCityId = async (cityName) => {
   }
 };
 
-const updateSholatTemplate = (data, jadwal) => {
+const getNextPrayerTime = (jadwal, nextDayJadwal) => {
+  const now = new Date();
+  const jadwalSholat = ["imsak", "subuh", "terbit", "dhuha", "dzuhur", "ashar", "maghrib", "isya"];
+  
+  let previousPrayer = null;
+  for (const sholat of jadwalSholat) {
+    const [hour, minute] = jadwal[sholat].split(":").map(Number);
+    const sholatTime = new Date(now);
+    sholatTime.setHours(hour, minute, 0);
+
+    if (sholatTime > now) {
+      return { name: previousPrayer, nextName: sholat, time: sholatTime };
+    }
+    previousPrayer = sholat;
+  }
+
+  const [hour, minute] = nextDayJadwal["imsak"].split(":").map(Number);
+  const nextPrayerTime = new Date(now);
+  nextPrayerTime.setDate(now.getDate() + 1);
+  nextPrayerTime.setHours(hour, minute, 0);
+
+  return { name: previousPrayer, nextName: "imsak (besok)", time: nextPrayerTime };
+};
+
+const formatTime = (ms) => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+};
+
+const updateSholatTemplate = (data, jadwal, nextDayJadwal) => {
   const template = document.getElementById("sholat-template").content.cloneNode(true);
   Object.entries({ lokasi: data.lokasi, daerah: data.daerah, ...jadwal }).forEach(([key, value]) => {
-    const el = template.querySelector(`.${key}`);
+    const el = template.querySelector(`.${key}-time`);
     if (el) el.textContent = value;
   });
+
+  const countdownEl = document.createElement("p");
+  countdownEl.id = "countdown";
+  template.appendChild(countdownEl);
 
   const container = document.getElementById("sholat");
   container.innerHTML = "";
   container.appendChild(template);
+
+  startCountdown(jadwal, nextDayJadwal);
+};
+
+const startCountdown = (jadwal, nextDayJadwal) => {
+  const countdownEl = document.getElementById("countdown");
+
+  const updateCountdown = () => {
+    const { name, nextName, time } = getNextPrayerTime(jadwal, nextDayJadwal);
+    const timeDiff = time - new Date();
+
+    if (timeDiff > 0) {
+      countdownEl.innerHTML = `Sebentar lagi masuk waktu <span class="font-bold">${nextName.toUpperCase()}</span> dalam <span class="font-bold">${formatTime(timeDiff)}</span>`;
+      updateActivePrayer(name);
+    } else {
+      location.reload();
+    }
+  };
+
+  updateCountdown();
+  setInterval(updateCountdown, 1000);
+};
+
+const updateActivePrayer = (currentPrayer) => {
+  const prayerElements = document.querySelectorAll("#list-sholat li");
+  prayerElements.forEach(li => {
+    li.classList.remove("active");
+    if (li.classList.contains(currentPrayer)) {
+      li.classList.add("active");
+    }
+  });
 };
 
 const getSholatData = () => {
@@ -60,7 +128,6 @@ const getSholatData = () => {
     return;
   }
 
-  // Tampilkan loading
   container.innerHTML = "<div class='loader'></div>";
 
   navigator.geolocation.getCurrentPosition(async ({ coords: { latitude: lat, longitude: lon } }) => {
@@ -72,11 +139,21 @@ const getSholatData = () => {
       if (!cityId) throw new Error("ID kota tidak ditemukan.");
 
       const today = new Date().toISOString().split("T")[0];
-      const { data, status } = await fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowFormatted = tomorrow.toISOString().split("T")[0];
 
-      if (!status) throw new Error("Gagal mengambil data sholat.");
+      console.log(cityName)
+      console.log(cityId)
+
+      const [todayData, tomorrowData] = await Promise.all([
+        fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`),
+        fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${tomorrowFormatted}`)
+      ]);
+
+      if (!todayData.status || !tomorrowData.status) throw new Error("Gagal mengambil data sholat.");
       
-      updateSholatTemplate(data, data.jadwal);
+      updateSholatTemplate(todayData.data, todayData.data.jadwal, tomorrowData.data.jadwal);
     } catch (error) {
       console.error("Error:", error);
       container.innerHTML = "<p>Terjadi kesalahan saat mengambil data.</p>";
@@ -87,7 +164,6 @@ const getSholatData = () => {
   });
 };
 
-// Jalankan saat halaman dimuat
 getSholatData();
 
 

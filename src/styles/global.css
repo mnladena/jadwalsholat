@@ -49,3 +49,8 @@ body {
     background-size: 100% 100%;
   }
 }
+
+.active {
+  background-color: #024646;
+  color: wheat;
+}
