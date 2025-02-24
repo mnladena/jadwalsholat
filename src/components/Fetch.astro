@@ -1,4 +1,4 @@
-<div>
+<div class="bg-white p-5 ">
     <div id="sholat"></div>
     <template id="sholat-template">
       <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span></h3>
@@ -89,6 +89,30 @@ const updateSholatTemplate = (data, jadwal, nextDayJadwal) => {
   container.appendChild(template);
 
   startCountdown(jadwal, nextDayJadwal);
+
+  setTimeout(() => {
+  const lokasiEl = document.querySelector(".lokasi");
+  const daerahEl = document.querySelector(".daerah");
+  const tanggalEl = document.querySelector(".tanggal");
+
+  if (lokasiEl) lokasiEl.textContent = data.lokasi;
+  if (daerahEl) daerahEl.textContent = data.daerah;
+
+  if (tanggalEl) {
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("id-ID", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    tanggalEl.textContent = formattedDate;
+  }
+
+  // console.log("Lokasi ditampilkan:", data.lokasi, data.daerah);
+  // console.log("Tanggal ditampilkan:", formattedDate);
+}, 500); // Tunggu sebentar agar elemen ada di DOM
+
 };
 
 const startCountdown = (jadwal, nextDayJadwal) => {
