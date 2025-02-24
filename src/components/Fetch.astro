@@ -1,7 +1,7 @@
 <div class="bg-white p-5 ">
     <div id="sholat"></div>
     <template id="sholat-template">
-      <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span></h3>
+      <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span>, <span class="residensi"></span></h3>
       <div class="tanggal mb-5"></div>
       <div id="countdown" class="mb-5 text-red-400"></div>
       <ul class="flex flex-col gap-4" id="list-sholat">
@@ -24,12 +24,19 @@
 const getCityFromCoordinates = async (lat, lon) => {
   try {
     const data = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-    return data?.address?.city || data?.address?.town || data?.address?.village || null;
+    
+    const city = data?.address?.city || data?.address?.town || data?.address?.village || "Tidak diketahui";
+    const village = data?.address?.village || data?.address?.hamlet || data?.address?.neighbourhood || data?.address?.residential	 || "Tidak diketahui"; // residensi/Kelurahan
+    
+    return { city, village };
   } catch (error) {
-    console.error("Gagal mendapatkan nama kota:", error);
-    return null;
+    console.error("Gagal mendapatkan detail lokasi:", error);
+    return { city: null, village: null };
   }
 };
+
+
+
 
 const getCityId = async (cityName) => {
   try {
@@ -156,19 +163,16 @@ const getSholatData = () => {
 
   navigator.geolocation.getCurrentPosition(async ({ coords: { latitude: lat, longitude: lon } }) => {
     try {
-      const cityName = await getCityFromCoordinates(lat, lon);
-      if (!cityName) throw new Error("Kota tidak ditemukan.");
+      const { city, village } = await getCityFromCoordinates(lat, lon);
+      if (!city) throw new Error("Kota tidak ditemukan.");
 
-      const cityId = await getCityId(cityName);
+      const cityId = await getCityId(city);
       if (!cityId) throw new Error("ID kota tidak ditemukan.");
 
       const today = new Date().toISOString().split("T")[0];
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowFormatted = tomorrow.toISOString().split("T")[0];
-
-      console.log(cityName)
-      console.log(cityId)
 
       const [todayData, tomorrowData] = await Promise.all([
         fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`),
@@ -178,6 +182,21 @@ const getSholatData = () => {
       if (!todayData.status || !tomorrowData.status) throw new Error("Gagal mengambil data sholat.");
       
       updateSholatTemplate(todayData.data, todayData.data.jadwal, tomorrowData.data.jadwal);
+
+      // 🌍 Update elemen HTML dengan kota, daerah, tanggal, dan residensi/kelurahan
+      setTimeout(() => {
+        document.querySelector(".lokasi").textContent = city;
+        document.querySelector(".daerah").textContent = todayData.data.daerah;
+        document.querySelector(".residensi").textContent = `${village}`;
+
+        const todayDate = new Date().toLocaleDateString("id-ID", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        document.querySelector(".tanggal").textContent = todayDate;
+      }, 500);
     } catch (error) {
       console.error("Error:", error);
       container.innerHTML = "<p>Terjadi kesalahan saat mengambil data.</p>";
@@ -187,6 +206,9 @@ const getSholatData = () => {
     container.innerHTML = "<p>Gagal mendeteksi lokasi.</p>";
   });
 };
+
+
+
 
 getSholatData();
 
