@@ -1,113 +1,94 @@
 <div>
     <div id="sholat"></div>
+    <template id="sholat-template">
+      <h3 class="mb-5">Jadwal Sholat - <span class="lokasi"></span>, <span class="daerah"></span></h3>
+      <div class="tanggal mb-5"></div>
+      <ul class="flex flex-col gap-4">
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Imsak:</strong> <span class="imsak"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Subuh:</strong> <span class="subuh"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Terbit:</strong> <span class="terbit"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Dhuha:</strong> <span class="dhuha"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Dzuhur:</strong> <span class="dzuhur"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Ashar:</strong> <span class="ashar"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Maghrib:</strong> <span class="maghrib"></span></li>
+        <li class="p-4 bg-green-200 flex justify-between items-center"><strong>Isya:</strong> <span class="isya"></span></li>
+      </ul>
+    </template>
 </div>
 
+
 <script>
-   async function getCityFromCoordinates(lat, lon) {
+   const fetchJSON = async (url) => (await fetch(url)).json();
+
+const getCityFromCoordinates = async (lat, lon) => {
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-    const data = await response.json();
-
-    console.log("Response Geocoding:", data); 
-
-    if (data && data.address) {
-      return data.address.city || data.address.town || data.address.village || null;
-    }
-    return null;
+    const data = await fetchJSON(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+    return data?.address?.city || data?.address?.town || data?.address?.village || null;
   } catch (error) {
-    console.error("Error mendapatkan nama kota:", error);
+    console.error("Gagal mendapatkan nama kota:", error);
     return null;
   }
-}
+};
 
-async function getCityId(cityName) {
+const getCityId = async (cityName) => {
   try {
-    const response = await fetch("https://api.myquran.com/v2/sholat/kota/semua");
-    const cities = await response.json();
-
-    console.log("Daftar Kota:", cities.data); 
-
-    if (!cities.status) throw new Error("Gagal mengambil daftar kota");
-
-    const city = cities.data.find(c => c.lokasi.toLowerCase().includes(cityName.toLowerCase()));
-
-    if (city) {
-      console.log(`Kota ditemukan: ${city.lokasi} (ID: ${city.id})`);
-      return city.id;
-    } else {
-      console.warn("Kota tidak ditemukan dalam database API.");
-      return null;
-    }
+    const { data, status } = await fetchJSON("https://api.myquran.com/v2/sholat/kota/semua");
+    return status ? data.find(c => c.lokasi.toLowerCase().includes(cityName.toLowerCase()))?.id || null : null;
   } catch (error) {
     console.error("Gagal menemukan ID kota:", error);
     return null;
   }
-}
+};
 
-async function getSholatData() {
-  try {
-    if (!navigator.geolocation) {
-      throw new Error("Geolocation tidak didukung di browser ini.");
-    }
+const updateSholatTemplate = (data, jadwal) => {
+  const template = document.getElementById("sholat-template").content.cloneNode(true);
+  Object.entries({ lokasi: data.lokasi, daerah: data.daerah, ...jadwal }).forEach(([key, value]) => {
+    const el = template.querySelector(`.${key}`);
+    if (el) el.textContent = value;
+  });
 
-    navigator.geolocation.getCurrentPosition(async (position) => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      console.log(`Lokasi Anda: ${lat}, ${lon}`);
+  const container = document.getElementById("sholat");
+  container.innerHTML = "";
+  container.appendChild(template);
+};
 
+const getSholatData = () => {
+  const container = document.getElementById("sholat");
+
+  if (!navigator.geolocation) {
+    container.innerHTML = "<p>Geolocation tidak didukung.</p>";
+    return;
+  }
+
+  // Tampilkan loading
+  container.innerHTML = "<div class='loader'></div>";
+
+  navigator.geolocation.getCurrentPosition(async ({ coords: { latitude: lat, longitude: lon } }) => {
+    try {
       const cityName = await getCityFromCoordinates(lat, lon);
-      if (!cityName) throw new Error("Gagal menemukan kota dari koordinat.");
-
-      console.log(`Nama Kota dari Koordinat: ${cityName}`);
+      if (!cityName) throw new Error("Kota tidak ditemukan.");
 
       const cityId = await getCityId(cityName);
-      if (!cityId) throw new Error("Gagal menemukan ID kota.");
+      if (!cityId) throw new Error("ID kota tidak ditemukan.");
 
-      // Dapatkan tanggal hari ini dalam format YYYY/MM/DD sesuai zona waktu lokal
-      const today = new Intl.DateTimeFormat("id-ID", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).format(new Date()).split('/').reverse().join('-'); 
+      const today = new Date().toISOString().split("T")[0];
+      const { data, status } = await fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`);
 
-      console.log("Tanggal Hari Ini:", today);
+      if (!status) throw new Error("Gagal mengambil data sholat.");
+      
+      updateSholatTemplate(data, data.jadwal);
+    } catch (error) {
+      console.error("Error:", error);
+      container.innerHTML = "<p>Terjadi kesalahan saat mengambil data.</p>";
+    }
+  }, (error) => {
+    console.error("Gagal mendapatkan lokasi:", error);
+    container.innerHTML = "<p>Gagal mendeteksi lokasi.</p>";
+  });
+};
 
-      // Fetch jadwal sholat berdasarkan ID kota
-      const response = await fetch(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`);
-      const result = await response.json();
-
-      console.log("Response Jadwal Sholat:", result); 
-
-      if (!result.status) throw new Error("Gagal mengambil data jadwal sholat.");
-
-      const data = result.data;
-      const jadwal = data.jadwal;
-
-      document.getElementById("sholat").innerHTML = `
-        <h3>Jadwal Sholat - ${data.lokasi}, ${data.daerah}</h3>
-        <p><strong>Tanggal:</strong> ${jadwal.tanggal}</p>
-        <ul>
-          <li><strong>Imsak:</strong> ${jadwal.imsak}</li>
-          <li><strong>Subuh:</strong> ${jadwal.subuh}</li>
-          <li><strong>Terbit:</strong> ${jadwal.terbit}</li>
-          <li><strong>Dhuha:</strong> ${jadwal.dhuha}</li>
-          <li><strong>Dzuhur:</strong> ${jadwal.dzuhur}</li>
-          <li><strong>Ashar:</strong> ${jadwal.ashar}</li>
-          <li><strong>Maghrib:</strong> ${jadwal.maghrib}</li>
-          <li><strong>Isya:</strong> ${jadwal.isya}</li>
-        </ul>
-      `;
-    }, (error) => {
-      console.error("Gagal mendapatkan lokasi:", error);
-      document.getElementById("sholat").innerHTML = "<p>Gagal mendeteksi lokasi.</p>";
-    });
-  } catch (error) {
-    console.error("Error:", error);
-    document.getElementById("sholat").innerHTML = "<p>Terjadi kesalahan saat mengambil data.</p>";
-  }
-}
-
-// Jalankan fungsi saat halaman dimuat
+// Jalankan saat halaman dimuat
 getSholatData();
+
 
 </script>
