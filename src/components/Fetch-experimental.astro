@@ -1,0 +1,127 @@
+---
+import { fetchJSON, getCityFromCoordinates, getCityId, getNextPrayerTime, formatTime } from "../utils/sholat";
+
+let jadwal = {};
+let nextDayJadwal = {};
+let lokasi = { city: "", daerah: "", residensi: "" };
+let cityList = [];
+let selectedCityId = null;
+let errorMessage = "";
+
+const loadCityList = async () => {
+  try {
+    const response = await fetchJSON("https://api.myquran.com/v2/sholat/kota/semua");
+    if (response.status) {
+      cityList = response.data;
+    }
+  } catch (error) {
+    console.error("Gagal mengambil daftar kota:", error);
+  }
+};
+
+const fetchPrayerTimes = async (cityId) => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowFormatted = tomorrow.toISOString().split("T")[0];
+
+    const [todayData, tomorrowData] = await Promise.all([
+      fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${today}`),
+      fetchJSON(`https://api.myquran.com/v2/sholat/jadwal/${cityId}/${tomorrowFormatted}`)
+    ]);
+
+    if (!todayData.status || !tomorrowData.status) throw new Error("Gagal mengambil data sholat.");
+
+    jadwal = todayData.data.jadwal;
+    nextDayJadwal = tomorrowData.data.jadwal;
+    lokasi = {
+      city: todayData.data.lokasi,
+      daerah: todayData.data.daerah,
+      residensi: todayData.data.residensi || "Tidak diketahui"
+    };
+  } catch (error) {
+    console.error("Error:", error);
+    errorMessage = "Terjadi kesalahan saat mengambil data.";
+  }
+};
+
+const getUserLocation = async () => {
+  if (!navigator.geolocation) {
+    errorMessage = "Geolocation tidak didukung.";
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async ({ coords: { latitude: lat, longitude: lon } }) => {
+    try {
+      const { city } = await getCityFromCoordinates(lat, lon);
+      if (!city) throw new Error("Kota tidak ditemukan.");
+
+      const cityId = await getCityId(city);
+      if (!cityId) throw new Error("ID kota tidak ditemukan.");
+
+      selectedCityId = cityId;
+      await fetchPrayerTimes(cityId);
+    } catch (error) {
+      console.error("Gagal mendapatkan lokasi:", error);
+      errorMessage = "Gagal mendeteksi lokasi.";
+    }
+  }, (error) => {
+    console.error("Error mendapatkan geolocation:", error);
+    errorMessage = "Gagal mendapatkan lokasi. Silakan pilih kota secara manual.";
+  });
+};
+
+await loadCityList();
+await getUserLocation();
+---
+
+<div class="bg-white p-5">
+  {errorMessage && <p class="text-red-500">{errorMessage}</p>}
+  
+  <div>
+    <label for="citySelect" class="block mb-2">Pilih Kota:</label>
+    <select id="citySelect" class="p-2 border rounded" onChange={(e) => fetchPrayerTimes(e.target.value)}>
+      <option value="">-- Pilih Kota --</option>
+      {cityList.map(city => (
+        <option value={city.id} selected={city.id === selectedCityId}>{city.lokasi}</option>
+      ))}
+    </select>
+  </div>
+
+  <div id="sholat">
+    <h3 class="mb-5">📍 {lokasi.city}, {lokasi.daerah}, {lokasi.residensi}</h3>
+    <div class="mb-5">📅 {new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+    <div id="countdown" class="mb-5 text-red-400"></div>
+    <ul class="flex flex-col gap-4">
+      {Object.entries(jadwal).map(([sholat, waktu]) => (
+        <li class="p-4 bg-green-200 flex justify-between items-center">
+          <strong>{sholat.charAt(0).toUpperCase() + sholat.slice(1)}</strong>
+          <span>{waktu}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+</div>
+
+<script>
+  const startCountdown = () => {
+    const countdownEl = document.getElementById("countdown");
+
+    const updateCountdown = () => {
+      const { nextName, time } = getNextPrayerTime(jadwal, nextDayJadwal);
+      const timeDiff = time - new Date();
+
+      if (timeDiff > 0) {
+        countdownEl.innerHTML = `Sebentar lagi masuk waktu <span class="font-bold">${nextName.toUpperCase()}</span> dalam <span class="font-bold">${formatTime(timeDiff)}</span>`;
+      } else {
+        location.reload();
+      }
+    };
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+  };
+
+  startCountdown();
+</script>
